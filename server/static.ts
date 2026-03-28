@@ -3,8 +3,8 @@ import path from "path";
 import fs from "fs";
 
 export function serveStatic(app: Express) {
-  // في Vercel، هذا هو المسار الوحيد الموثوق للوصول للملفات بعد البناء
-  const publicPath = path.resolve(process.cwd(), "dist", "public");
+ // استخدم path.join مع __dirname لضمان الوصول للمسار في Vercel
+const publicPath = path.resolve(process.cwd(), "dist", "public");
 
   // 1. تقديم الملفات الثابتة (CSS, JS, Images)
   app.use(express.static(publicPath));
