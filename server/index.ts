@@ -62,9 +62,18 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await seedDatabase();
-  await registerRoutes(httpServer, app);
+  try {
+    // حاول تشغيل الـ Seed ولكن لا تجعله يوقف السيرفر إذا تأخر
+    if (process.env.NODE_ENV !== "production") {
+      await seedDatabase();
+    }
+    
+    await registerRoutes(httpServer, app);
+  } catch (error) {
+    log(`خطأ في تشغيل البيانات: ${error}`);
+  }
 
+  // بقية الكود كما هو...
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
