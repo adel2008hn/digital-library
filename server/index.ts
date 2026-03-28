@@ -1,11 +1,10 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-// سيدي، جرب تغيير طريقة الاستيراد لتكون هكذا لضمان وصول Vercel للملف
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
-import { seedDatabase } from "./storage";
+import path from "path"; // إضافة هذا السطر سيدي
+import fs from "fs";     // إضافة هذا السطر سيدي
+import { registerRoutes } from "./routes.js";
+import { seedDatabase } from "./storage.js";
 import { createServer } from "http";
-
 
 const app = express();
 const httpServer = createServer(app);
@@ -39,7 +38,7 @@ export function log(message: string, source = "express") {
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const requestPath = req.path; // قمت بتغيير الاسم هنا لفك التعارض مع مكتبة path
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -50,12 +49,11 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (requestPath.startsWith("/api")) {
+      let logLine = `${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
-
       log(logLine);
     }
   });
@@ -65,50 +63,43 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // سيدي، سنقوم بتشغيل الـ Seed في كل الأحوال لضمان وجود حسابك في قاعدة البيانات
     log("جاري التحقق من قاعدة البيانات وإنشاء الحسابات الأساسية سيدي...");
-    //await seedDatabase(); 
-    
-    // تسجيل المسارات (Routes)
     await registerRoutes(httpServer, app);
   } catch (error) {
     log(`خطأ في تشغيل البيانات سيدي: ${error}`);
   }
 
-  // بقية الكود كما هو...
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
     console.error("Internal Server Error:", err);
-
     if (res.headersSent) {
       return next(err);
     }
-
     return res.status(status).json({ message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
+    // محاولة إيجاد المجلد الصحيح للملفات الساكنة
+    const publicPath = path.resolve(__dirname, "../../client/dist");
+    const fallbackPath = path.resolve(__dirname, "../dist/public");
+    const staticPath = fs.existsSync(publicPath) ? publicPath : fallbackPath;
+    
+    log(`استخدام مسار الملفات الساكنة: ${staticPath}`);
+    
+    app.use(express.static(staticPath));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(staticPath, "index.html"));
+    });
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-// تعديل السطر ليقوم بتحويل المنفذ إلى رقم بشكل صريح
-const port = Number(process.env.PORT) || 5000;
-
-httpServer.listen(port, "0.0.0.0", () => {
-  log(`✓ السيرفر يعمل الآن على المنفذ ${port} سيدي`);
-});
+  const port = Number(process.env.PORT) || 5000;
+  httpServer.listen(port, "0.0.0.0", () => {
+    log(`✓ السيرفر يعمل الآن على المنفذ ${port} سيدي`);
+  });
 })();
-// أضف هذا السطر في آخر الملف تماماً سيدي
+
 export default app;
