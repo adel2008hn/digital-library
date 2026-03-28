@@ -1,0 +1,13 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+# استثناء ملفات البيئة والملفات الضخمة سيدي
+.local/
+.config/
+node_modules/
+dist/
+.env
+public/uploads/
