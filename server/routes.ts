@@ -9,7 +9,11 @@ import fs from "fs";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
 import { storage, HARDCODED_ADMIN, pool } from "./storage.js";
+import { createClient } from '@supabase/supabase-js';
 
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 const PgSession = connectPgSimple(session);
 
 // استخدم مجلد /tmp لأنه المجلد الوحيد المسموح بالكتابة فيه مؤقتاً في Vercel
@@ -419,15 +423,45 @@ export async function registerRoutes(
     }
   });
 
-  // ========== File Upload ==========
+ // ========== File Upload to Supabase (الملك عادل) ==========
 
-  app.post("/api/upload", upload.single("file"), (req, res) => {
-    if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-    res.json({
-      url: `/uploads/${req.file.filename}`,
-      fileName: req.file.originalname,
-    });
-  });
-  return httpServer;
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.session.userId) return res.status(401).json({ message: "سيدي، يجب تسجيل الدخول أولاً" });
+      if (!req.file) return res.status(400).json({ message: "لم يتم اختيار ملف" });
+
+      const file = req.file;
+      const fileExt = path.extname(file.originalname);
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${fileExt}`;
+
+      // رفع الملف إلى Bucket اسمه 'books' في سوبابيس
+      // سيدي، تأكد من إنشاء Bucket بهذا الاسم وجعله Public
+      const { data, error } = await supabase.storage
+        .from('books') 
+        .upload(fileName, fs.readFileSync(file.path), {
+          contentType: file.mimetype,
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // الحصول على الرابط العام (Public URL)
+      const { data: urlData } = supabase.storage
+        .from('books')
+        .getPublicUrl(fileName);
+
+      // حذف الملف المؤقت من سيرفر Render للحفاظ على المساحة
+      fs.unlinkSync(file.path);
+
+      res.json({
+        url: urlData.publicUrl,
+        fileName: file.originalname,
+      });
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      res.status(500).json({ message: "فشل الرفع لسوبابيس: " + error.message });
+    }
+  });
+
+  return httpServer;
 }
