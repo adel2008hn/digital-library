@@ -8,7 +8,7 @@ import path from "path";
 import fs from "fs";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
-import { storage, HARDCODED_ADMIN, pool } from "./storage";
+import { storage, HARDCODED_ADMIN, pool } from "./storage.js";
 
 const PgSession = connectPgSimple(session);
 

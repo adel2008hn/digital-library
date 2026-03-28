@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import path from "path"; // إضافة هذا السطر سيدي
-import fs from "fs";     // إضافة هذا السطر سيدي
+import path from "path"; 
+import fs from "fs";     
 import { registerRoutes } from "./routes.js";
 import { seedDatabase } from "./storage.js";
 import { createServer } from "http";
@@ -38,7 +38,7 @@ export function log(message: string, source = "express") {
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const requestPath = req.path; // قمت بتغيير الاسم هنا لفك التعارض مع مكتبة path
+  const requestPath = req.path; 
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -64,6 +64,10 @@ app.use((req, res, next) => {
 (async () => {
   try {
     log("جاري التحقق من قاعدة البيانات وإنشاء الحسابات الأساسية سيدي...");
+    
+    // سيدي، قمت بإعادة تفعيل السطر المطلوب هنا لضمان إنشاء بياناتك
+    await seedDatabase(); 
+    
     await registerRoutes(httpServer, app);
   } catch (error) {
     log(`خطأ في تشغيل البيانات سيدي: ${error}`);
@@ -80,7 +84,6 @@ app.use((req, res, next) => {
   });
 
   if (process.env.NODE_ENV === "production") {
-    // محاولة إيجاد المجلد الصحيح للملفات الساكنة
     const publicPath = path.resolve(__dirname, "../../client/dist");
     const fallbackPath = path.resolve(__dirname, "../dist/public");
     const staticPath = fs.existsSync(publicPath) ? publicPath : fallbackPath;
