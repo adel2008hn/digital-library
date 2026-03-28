@@ -465,11 +465,10 @@ export async function registerRoutes(
 
   // سيدي الملك، هذا الجزء هو الأهم لعمل الموقع على Render
   // نستخدم (.*) بدلاً من * لتجنب خطأ "Missing parameter name"
-  app.get('(.*)', (_req, res) => {
-    // توجيه المستخدم لملف index.html الرئيسي في المجلد المترجم
+  // سيدي الملك، هذا التعديل سيهيئ المسارات بشكل صحيح لتعمل على Render و Vercel
+  app.get('*', (_req, res) => {
     res.sendFile(path.resolve(process.cwd(), "dist", "public", "index.html"));
   });
 
   return httpServer;
 }
-
