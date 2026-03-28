@@ -453,7 +453,7 @@ export async function registerRoutes(
       fs.unlinkSync(file.path);
 
       res.json({
-        url: urlData.publicUrl,
+   url: urlData.publicUrl,
         fileName: file.originalname,
       });
     } catch (error: any) {
@@ -461,6 +461,15 @@ export async function registerRoutes(
       res.status(500).json({ message: "فشل الرفع لسوبابيس: " + error.message });
     }
   });
+// ... (بعد نهاية مسار الـ /api/upload)
 
-  return httpServer;
+  // سيدي الملك، هذا الجزء هو الأهم لعمل الموقع على Render
+  // نستخدم (.*) بدلاً من * لتجنب خطأ "Missing parameter name"
+  app.get('(.*)', (_req, res) => {
+    // توجيه المستخدم لملف index.html الرئيسي في المجلد المترجم
+    res.sendFile(path.resolve(process.cwd(), "dist", "public", "index.html"));
+  });
+
+  return httpServer;
 }
+

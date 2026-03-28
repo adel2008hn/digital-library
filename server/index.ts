@@ -95,9 +95,12 @@ app.use((req, res, next) => {
     log(`استخدام مسار الملفات الساكنة: ${staticPath}`);
     
     app.use(express.static(staticPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(staticPath, "index.html"));
-    });
+   app.get("*", (_req, res, next) => {
+  if (_req.path.startsWith("/api")) {
+    return next();
+  }
+  res.sendFile(path.join(staticPath, "index.html"));
+});
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
