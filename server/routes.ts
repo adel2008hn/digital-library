@@ -16,9 +16,11 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 const PgSession = connectPgSimple(session);
 
-// استخدم مجلد /tmp لأنه المجلد الوحيد المسموح بالكتابة فيه مؤقتاً في Vercel
+// التعديل الملكي للمجلدات سيدي
 const isProduction = process.env.NODE_ENV === "production";
-const uploadDir = path.join(process.cwd(), "public", "uploads");
+// نستخدم مساراً نسبياً متوافقاً مع بنية المشروع
+const uploadDir = path.resolve(process.cwd(), "public", "uploads");
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -79,7 +81,7 @@ export async function registerRoutes(
     })
   );
 
-  app.use("/uploads", express.static(uploadDir));
+  app.use("/uploads", express.static(uploadDir, { fallthrough: true }));
 
   function getSessionId(req: Request): string {
     if (!req.session.sessionId) {
