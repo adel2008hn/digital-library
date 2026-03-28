@@ -46,12 +46,16 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  await esbuild({
+ await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
-    format: "cjs",
-    outfile: "dist/index.cjs",
+    format: "esm", // استخدام الصيغة الحديثة كما اتفقنا سيدي
+    // outdir: "dist", // قم بإزالة هذه إذا كنت تستخدم outfile
+    outfile: "dist/index.mjs", // تغيير الامتداد إلى .mjs ليتوافق مع ESM
+    banner: { 
+      js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" 
+    },
     define: {
       "process.env.NODE_ENV": '"production"',
     },
@@ -59,7 +63,7 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
-}
+  }
 
 buildAll().catch((err) => {
   console.error(err);
