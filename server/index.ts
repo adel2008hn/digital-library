@@ -5,7 +5,11 @@ import fs from "fs";
 import { registerRoutes } from "./routes.js";
 import { seedDatabase } from "./storage.js";
 import { createServer } from "http";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 

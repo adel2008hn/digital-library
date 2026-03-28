@@ -7,8 +7,9 @@ import {
   type User, type InsertUser, type Book, type InsertBook,
   type Rating, type Favorite, type Bookmark, type Comment, type InsertComment,
   relatedCategories
-} from "@shared/schema";
+} from "../shared/schema.js"; // تم تعديل المسار ليعمل على فيرسل سيدي
 
+// إعداد الاتصال بقاعدة البيانات
 export const pool = new pg.Pool({
   connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -23,13 +24,19 @@ pool.on('error', (err) => {
 
 const db = drizzle(pool);
 
+// دالة إعادة المحاولة للاتصال بقاعدة البيانات
 async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 3000): Promise<T> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       const msg = error?.message || '';
-      const isRetryable = error?.code === 'XX000' || msg.includes('endpoint has been disabled') || msg.includes('connection refused') || msg.includes('terminating connection') || msg.includes('Connection terminated') || msg.includes('ECONNREFUSED');
+      const isRetryable = error?.code === 'XX000' || 
+                         msg.includes('endpoint has been disabled') || 
+                         msg.includes('connection refused') || 
+                         msg.includes('terminating connection') || 
+                         msg.includes('Connection terminated') || 
+                         msg.includes('ECONNREFUSED');
       if (attempt === retries || !isRetryable) throw error;
       console.log(`Database retry attempt ${attempt}/${retries}, waiting ${delay}ms...`);
       await new Promise(r => setTimeout(r, delay));
@@ -37,6 +44,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 3000): Pr
   }
   throw new Error("Exhausted retries");
 }
+
 export interface IStorage {
   // --- دوال المستخدمين ---
   getUser(id: number): Promise<User | undefined>;
@@ -63,7 +71,7 @@ export interface IStorage {
   getBookmark(bookId: number, sessionId: string): Promise<{ page: number } | null>;
   setBookmark(bookId: number, sessionId: string, page: number): Promise<void>;
 
-  // --- دوال التعليقات (تم دمجها سيدي لتعمل بكفاءة) ---
+  // --- دوال التعليقات ---
   getCommentsByBook(bookId: number): Promise<Comment[]>;
   getComment(id: number): Promise<Comment | undefined>;
   createComment(comment: InsertComment & { sessionId: string }): Promise<Comment>;
@@ -75,9 +83,10 @@ export interface IStorage {
   // --- الإحصائيات ---
   getStats(): Promise<{ visits: number; bookCount: number }>;
   incrementVisits(): Promise<void>;
-} // تأكد أن القوس يغلق هنا سيدي
+}
 
 export class DatabaseStorage implements IStorage {
+  // --- دوال المستخدمين ---
   async getUser(id: number): Promise<User | undefined> {
     return withRetry(async () => {
       const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -126,6 +135,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // --- دوال الكتب ---
   async getBooks(search?: string, category?: string): Promise<Book[]> {
     return withRetry(async () => {
       const conditions = [];
@@ -192,6 +202,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // --- دوال التفاعل ---
   async rateBook(bookId: number, sessionId: string, rating: number): Promise<void> {
     return withRetry(async () => {
       const [existing] = await db.select().from(ratings).where(and(eq(ratings.bookId, bookId), eq(ratings.sessionId, sessionId)));
@@ -242,6 +253,69 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // --- دوال التعليقات ---
+  async getCommentsByBook(bookId: number): Promise<Comment[]> {
+    return withRetry(() =>
+      db.select().from(comments)
+        .where(eq(comments.bookId, bookId))
+        .orderBy(desc(comments.createdAt))
+    );
+  }
+
+  async getComment(id: number): Promise<Comment | undefined> {
+    return withRetry(async () => {
+      const [comment] = await db.select().from(comments).where(eq(comments.id, id));
+      return comment;
+    });
+  }
+
+  async createComment(comment: InsertComment & { sessionId: string }): Promise<Comment> {
+    return withRetry(async () => {
+      const [newComment] = await db.insert(comments).values({
+        bookId: comment.bookId,
+        authorName: comment.authorName,
+        content: comment.content,
+        sessionId: comment.sessionId,
+        likes: 0
+      }).returning();
+      return newComment;
+    });
+  }
+
+  async likeComment(id: number): Promise<Comment> {
+    return withRetry(async () => {
+      const [comment] = await db.select().from(comments).where(eq(comments.id, id));
+      if (!comment) throw new Error("Comment not found");
+      const [updated] = await db.update(comments).set({ likes: (comment.likes || 0) + 1 }).where(eq(comments.id, id)).returning();
+      return updated;
+    });
+  }
+
+  async toggleLike(id: number, action: 'add' | 'remove'): Promise<Comment> {
+    return withRetry(async () => {
+      const [comment] = await db.select().from(comments).where(eq(comments.id, id));
+      if (!comment) throw new Error("Comment not found");
+      const currentLikes = comment.likes || 0;
+      const newLikes = action === 'add' ? currentLikes + 1 : Math.max(0, currentLikes - 1);
+      const [updated] = await db.update(comments).set({ likes: newLikes }).where(eq(comments.id, id)).returning();
+      return updated;
+    });
+  }
+
+  async deleteComment(id: number): Promise<void> {
+    return withRetry(async () => {
+      await db.delete(comments).where(eq(comments.id, id));
+    });
+  }
+
+  async updateComment(id: number, content: string): Promise<Comment> {
+    return withRetry(async () => {
+      const [updated] = await db.update(comments).set({ content }).where(eq(comments.id, id)).returning();
+      return updated;
+    });
+  }
+
+  // --- الإحصائيات ---
   async getStats(): Promise<{ visits: number; bookCount: number }> {
     return withRetry(async () => {
       const [stats] = await db.select().from(siteStats);
@@ -260,79 +334,6 @@ export class DatabaseStorage implements IStorage {
       }
     });
   }
-
-  // دوال التعليقات المحدثة
-  async getCommentsByBook(bookId: number): Promise<Comment[]> {
-    return withRetry(() =>
-      db.select().from(comments)
-        .where(eq(comments.bookId, bookId))
-        .orderBy(desc(comments.createdAt))
-    );
-  }
-  async deleteComment(id: number): Promise<void> {
-    return withRetry(async () => {
-      await db.delete(comments).where(eq(comments.id, id));
-    });
-  }
-
-  async updateComment(id: number, content: string): Promise<Comment> {
-    return withRetry(async () => {
-      const [updated] = await db.update(comments)
-        .set({ content })
-        .where(eq(comments.id, id))
-        .returning();
-      return updated;
-    });
-  }
-
-  async toggleLike(id: number, action: 'add' | 'remove'): Promise<Comment> {
-  return await withRetry(async () => {
-    const [comment] = await db.select().from(comments).where(eq(comments.id, id));
-    if (!comment) throw new Error("Comment not found");
-
-    // سيدي، هنا يتم تحديد إذا كنا سنزيد 1 أو ننقص 1
-    const currentLikes = comment.likes || 0;
-    const newLikes = action === 'add' ? currentLikes + 1 : Math.max(0, currentLikes - 1);
-
-    const [updated] = await db.update(comments)
-      .set({ likes: newLikes })
-      .where(eq(comments.id, id))
-      .returning();
-    return updated;
-  });
-}
-// --- سيدي، أضف هذه الدوال داخل كلاس DatabaseStorage ---
-
-async getComment(id: number): Promise<Comment | undefined> {
-  const [comment] = await db.select().from(comments).where(eq(comments.id, id));
-  return comment;
-}
-
-async likeComment(id: number): Promise<Comment> {
-  const [comment] = await db.select().from(comments).where(eq(comments.id, id));
-  if (!comment) throw new Error("Comment not found");
-  
-  const [updated] = await db
-    .update(comments)
-    .set({ likes: (comment.likes || 0) + 1 })
-    .where(eq(comments.id, id))
-    .returning();
-  return updated;
-}
-
-async createComment(comment: InsertComment & { sessionId: string }): Promise<Comment> {
-  const [newComment] = await db
-    .insert(comments)
-    .values({
-      bookId: comment.bookId,
-      authorName: comment.authorName,
-      content: comment.content,
-      sessionId: comment.sessionId,
-      likes: 0
-    })
-    .returning();
-  return newComment;
-}
 }
 
 export const storage = new DatabaseStorage();
