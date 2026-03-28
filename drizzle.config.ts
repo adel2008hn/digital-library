@@ -1,7 +1,10 @@
 import { defineConfig } from "drizzle-kit";
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL, ensure the database is provisioned");
+// سيدي، جعلنا الكود يقرأ POSTGRES_URL الجديد أو DATABASE_URL القديم
+const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+
+if (!dbUrl) {
+  throw new Error("Missing Database URL (POSTGRES_URL or DATABASE_URL)");
 }
 
 export default defineConfig({
@@ -9,6 +12,6 @@ export default defineConfig({
   schema: "./shared/schema.ts",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL,
+    url: dbUrl,
   },
 });
