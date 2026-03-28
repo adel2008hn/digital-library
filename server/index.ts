@@ -1,9 +1,10 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
+import { registerRoutes } from "./routes.ts";
+import { serveStatic } from "./static.ts";
+import { seedDatabase } from "./storage.ts";
 import { createServer } from "http";
-import { seedDatabase } from "./storage";
+
 
 const app = express();
 const httpServer = createServer(app);
