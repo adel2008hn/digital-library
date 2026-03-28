@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 // سيدي، جرب تغيير طريقة الاستيراد لتكون هكذا لضمان وصول Vercel للملف
-import { registerRoutes } from "./routes.js";
+import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { seedDatabase } from "./storage";
 import { createServer } from "http";
@@ -67,7 +67,7 @@ app.use((req, res, next) => {
   try {
     // سيدي، سنقوم بتشغيل الـ Seed في كل الأحوال لضمان وجود حسابك في قاعدة البيانات
     log("جاري التحقق من قاعدة البيانات وإنشاء الحسابات الأساسية سيدي...");
-    await seedDatabase(); 
+    //await seedDatabase(); 
     
     // تسجيل المسارات (Routes)
     await registerRoutes(httpServer, app);

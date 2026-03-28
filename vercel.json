@@ -17,6 +17,10 @@
       "dest": "server/index.ts"
     },
     {
+      "src": "/uploads/(.*)",
+      "dest": "/uploads/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
