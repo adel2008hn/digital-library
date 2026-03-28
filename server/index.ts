@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes"; 
+// سيدي، جرب تغيير طريقة الاستيراد لتكون هكذا لضمان وصول Vercel للملف
+import { registerRoutes } from "./routes.js";
 import { serveStatic } from "./static";
 import { seedDatabase } from "./storage";
 import { createServer } from "http";
