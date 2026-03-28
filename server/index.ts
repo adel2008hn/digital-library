@@ -92,9 +92,10 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = 5000;
-  // سيدي، استخدمنا 127.0.0.1 لحل مشكلة ويندوز ENOTSUP
-  httpServer.listen(port, "127.0.0.1", () => {
-    log(`✓ السيرفر يعمل الآن على http://localhost:${port} سيدي`);
-  });
+// تعديل السطر ليقوم بتحويل المنفذ إلى رقم بشكل صريح
+const port = Number(process.env.PORT) || 5000;
+
+httpServer.listen(port, "0.0.0.0", () => {
+  log(`✓ السيرفر يعمل الآن على المنفذ ${port} سيدي`);
+});
 })();
