@@ -1,44 +1,27 @@
 import express, { type Express } from "express";
-import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import fs from "fs";
 
 export function serveStatic(app: Express) {
-  // طريقة آمنة للحصول على المسار في Vercel
-  let __dirname;
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    __dirname = path.dirname(__filename);
-  } catch (e) {
-    // إذا فشل (بسبب cjs)، نستخدم المسار الافتراضي لـ Node
-    __dirname = process.cwd();
-  }
+  // في Vercel، هذا هو المسار الوحيد الموثوق للوصول للملفات بعد البناء
+  const publicPath = path.resolve(process.cwd(), "dist", "public");
 
-  // المسار الذي يبحث فيه Vercel عن الملفات بعد البناء
-  const pathsToTry = [
-    path.resolve(__dirname, "..", "dist", "public"),
-    path.resolve(__dirname, "dist", "public"),
-    path.resolve(process.cwd(), "dist", "public"),
-    path.resolve(process.cwd(), "public")
-  ];
-
-  let publicPath = "";
-  for (const p of pathsToTry) {
-    if (fs.existsSync(p) && fs.readdirSync(p).includes("index.html")) {
-      publicPath = p;
-      break;
-    }
-  }
-
-  if (!publicPath) {
-    console.error("Critical: Could not find build directory in any of:", pathsToTry);
-    return;
-  }
-
+  // 1. تقديم الملفات الثابتة (CSS, JS, Images)
   app.use(express.static(publicPath));
 
+  // 2. معالجة طلبات الصفحات (Frontend Routing)
   app.get("*", (req, res, next) => {
+    // إذا كان الطلب يبدأ بـ /api نتركه يمر للمسارات البرمجية
     if (req.path.startsWith("/api")) return next();
-    res.sendFile(path.resolve(publicPath, "index.html"));
+
+    const indexPath = path.resolve(publicPath, "index.html");
+
+    // التحقق من وجود الملف قبل إرساله لمنع خطأ 500
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      // رسالة خطأ واضحة في حال فقدان ملف الواجهة
+      res.status(404).send("سيدي، لم أتمكن من العثور على ملف الواجهة الرئيسي.");
+    }
   });
 }
