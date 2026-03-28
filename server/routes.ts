@@ -55,7 +55,9 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   const isProduction = process.env.NODE_ENV === "production";
-  app.set("trust proxy", 1);
+ // سيدي، هذا السطر يخبر السيرفر أن يثق في Vercel كوسيط (Proxy)
+  app.set("trust proxy", 1); 
+
   app.use(
     session({
       store: new PgSession({
@@ -63,14 +65,15 @@ export async function registerRoutes(
         createTableIfMissing: true,
         tableName: "session",
       }),
-      secret: process.env.SESSION_SECRET!,
+      secret: process.env.SESSION_SECRET || "default_secret",
       resave: false,
-      saveUninitialized: true,
+      saveUninitialized: false, // سيدي، جعلناها false لمنع إنشاء جلسات وهمية غير ضرورية
+      proxy: true,              // ضروري جداً ليعمل الـ Cookie خلف بروكسي Vercel
       cookie: {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         httpOnly: true,
         sameSite: "lax",
-        secure: isProduction,
+        secure: true,           // يجب أن تكون true لأن Vercel يستخدم HTTPS دائماً
       },
     })
   );

@@ -64,14 +64,14 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
-    // حاول تشغيل الـ Seed ولكن لا تجعله يوقف السيرفر إذا تأخر
-    if (process.env.NODE_ENV !== "production") {
-      await seedDatabase();
-    }
+    // سيدي، سنقوم بتشغيل الـ Seed في كل الأحوال لضمان وجود حسابك في قاعدة البيانات
+    log("جاري التحقق من قاعدة البيانات وإنشاء الحسابات الأساسية سيدي...");
+    await seedDatabase(); 
     
+    // تسجيل المسارات (Routes)
     await registerRoutes(httpServer, app);
   } catch (error) {
-    log(`خطأ في تشغيل البيانات: ${error}`);
+    log(`خطأ في تشغيل البيانات سيدي: ${error}`);
   }
 
   // بقية الكود كما هو...
