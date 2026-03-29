@@ -467,9 +467,5 @@ export async function registerRoutes(
   // نستخدم (.*) بدلاً من * لتجنب خطأ "Missing parameter name"
   // سيدي الملك، هذا التعديل سيهيئ المسارات بشكل صحيح لتعمل على Render و Vercel
  // سيدي الملك، هذا التعديل خاص بـ Express 5 للعمل على Render
-  app.get('/:any*', (_req, res) => {
-    res.sendFile(path.resolve(process.cwd(), "dist", "public", "index.html"));
-  });
-
   return httpServer;
 }
