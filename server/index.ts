@@ -87,20 +87,20 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
-  if (process.env.NODE_ENV === "production") {
+ if (process.env.NODE_ENV === "production") {
     const publicPath = path.resolve(__dirname, "../../client/dist");
     const fallbackPath = path.resolve(__dirname, "../dist/public");
     const staticPath = fs.existsSync(publicPath) ? publicPath : fallbackPath;
     
-    log(`استخدام مسار الملفات الساكنة: ${staticPath}`);
+    log(`استخدام مسار الملفات الساكنة سيدي: ${staticPath}`);
     
     app.use(express.static(staticPath));
-   app.get("*", (_req, res, next) => {
-  if (_req.path.startsWith("/api")) {
-    return next();
-  }
-  res.sendFile(path.join(staticPath, "index.html"));
-});
+
+    // سيدي، استخدمنا هذا التعبير (RegExp) بدلاً من "*" لحل مشكلة pathToRegexpError للأبد
+    app.get(/^(?!\/api).+/, (_req, res) => {
+        res.sendFile(path.join(staticPath, "index.html"));
+    });
+  
   } else {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
