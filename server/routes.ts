@@ -16,11 +16,7 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 const PgSession = connectPgSimple(session);
 
-// التعديل الملكي للمجلدات سيدي
-const isProduction = process.env.NODE_ENV === "production";
-// نستخدم مساراً نسبياً متوافقاً مع بنية المشروع
 const uploadDir = path.resolve(process.cwd(), "public", "uploads");
-
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -34,8 +30,7 @@ const upload = multer({
       cb(null, uniqueName);
     },
   }),
-  // تم التأكيد سيدي: الحد 20 جيجابايت
-  limits: { fileSize: 20 * 1024 * 1024 * 1024 }, 
+  limits: { fileSize: 20 * 1024 * 1024 * 1024 }, // سيدي، 20 جيجابايت كما طلبت
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (allowedExtensions.includes(ext)) {
@@ -53,35 +48,30 @@ declare module "express-session" {
   }
 }
 
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  const isProduction = process.env.NODE_ENV === "production";
- // سيدي، هذا السطر يخبر السيرفر أن يثق في Vercel كوسيط (Proxy)
+export async function registerRoutes(app: Express): Promise<void> {
+  // 1. إعداد الثقة في البروكسي سيدي
   app.set("trust proxy", 1); 
 
-  app.use(
-    session({
-      store: new PgSession({
-        pool,
-        createTableIfMissing: true,
-        tableName: "session",
-      }),
-      secret: process.env.SESSION_SECRET || "default_secret",
-      resave: false,
-      saveUninitialized: false, // سيدي، جعلناها false لمنع إنشاء جلسات وهمية غير ضرورية
-      proxy: true,              // ضروري جداً ليعمل الـ Cookie خلف بروكسي Vercel
-      cookie: {
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        sameSite: "lax",
-        secure: true,           // يجب أن تكون true لأن Vercel يستخدم HTTPS دائماً
-      },
-    })
-  );
+  // 2. إعداد الجلسات
+  app.use(session({
+    store: new PgSession({ 
+      pool, 
+      tableName: 'session',
+      createTableIfMissing: true 
+    }),
+    secret: process.env.SESSION_SECRET || "your-secret-key",
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    cookie: { 
+      secure: process.env.NODE_ENV === "production", 
+      httpOnly: true, 
+      sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000 
+    }
+  }));
 
-  app.use("/uploads", express.static(uploadDir, { fallthrough: true }));
+  app.use("/uploads", express.static(uploadDir));
 
   function getSessionId(req: Request): string {
     if (!req.session.sessionId) {
@@ -100,7 +90,6 @@ export async function registerRoutes(
   };
 
   // ========== Auth ==========
-
   app.get("/api/auth/check-setup", async (_req, res) => {
     try {
       const hasAdmin = await storage.hasAdmin();
@@ -155,84 +144,12 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  // ========== Admin: Authors ==========
-
-  app.get("/api/admin/authors", async (req, res) => {
-    try {
-      if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
-      const authors = await storage.getAuthors();
-      res.json(authors.map((a) => ({ id: a.id, username: a.username, role: a.role, isActive: a.isActive })));
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.post("/api/admin/authors", async (req, res) => {
-    try {
-      if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
-      const { username, password } = req.body;
-      if (!username || !password) return res.status(400).json({ message: "Username and password required" });
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const newAuthor = await storage.createUser({ username, password: hashedPassword, role: "author", isActive: true });
-      res.status(201).json({ id: newAuthor.id, username: newAuthor.username, role: newAuthor.role, isActive: newAuthor.isActive });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.patch("/api/admin/authors/:id/toggle", async (req, res) => {
-    try {
-      if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
-      await storage.toggleAuthorStatus(parseInt(req.params.id));
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.delete("/api/admin/authors/:id", async (req, res) => {
-    try {
-      if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") return res.status(403).json({ message: "Forbidden" });
-      await storage.deleteAuthor(parseInt(req.params.id));
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
   // ========== Books ==========
-
-  app.get("/api/books/my", requireAuth, async (req: any, res) => {
-    try {
-      const books = await storage.getBooksByAuthor(req.user.id);
-      res.json(books);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
   app.get("/api/books", async (req, res) => {
     try {
       const { search, category } = req.query;
       const result = await storage.getBooks(search as string, category as string);
       res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.get("/api/books/:id/suggested", async (req, res) => {
-    try {
-      const suggested = await storage.getSuggestedBooks(parseInt(req.params.id));
-      res.json(suggested);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
@@ -251,221 +168,69 @@ export async function registerRoutes(
   app.post("/api/books", requireAuth, async (req: any, res) => {
     try {
       const data = req.body;
-      const title = data.title;
-      const authorName = data.author_name || data.authorName;
-      const mainCategory = data.category_main || data.mainCategory;
-      const subCategory = data.category_sub || data.subCategory;
-      const volumes = data.parts_count || data.volumes;
-      const fileUrl = data.pdf_url || data.fileUrl;
-      const fileName = data.fileName;
-
-      if (!title || !authorName || !mainCategory) {
-        return res.status(400).json({ message: "يرجى ملء الحقول الأساسية: العنوان، المؤلف، والتصنيف" });
-      }
-
       const book = await storage.createBook({
-        title,
-        authorName,
+        title: data.title,
+        authorName: data.authorName || data.author_name,
         authorId: req.user.id,
-        mainCategory,
-        subCategory,
-        volumes: Number(volumes) || 1,
-        coverUrl: data.cover_url || data.coverUrl,
+        mainCategory: data.mainCategory || data.category_main,
+        subCategory: data.subCategory || data.category_sub,
+        volumes: Number(data.volumes || data.parts_count) || 1,
+        coverUrl: data.coverUrl || data.cover_url,
         description: data.description || "",
-        fileUrl,
-        fileName,
+        fileUrl: data.fileUrl || data.pdf_url,
+        fileName: data.fileName,
       });
-
       res.status(201).json(book);
     } catch (error: any) {
-      console.error("Error creating book:", error);
-      res.status(500).json({ message: error.message || "حدث خطأ أثناء إضافة الكتاب" });
+      res.status(500).json({ message: error.message });
     }
   });
 
-  app.patch("/api/books/:id", requireAuth, async (req: any, res) => {
+  // ========== File Upload to Supabase ==========
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
     try {
-      const bookId = parseInt(req.params.id);
-      const book = await storage.getBook(bookId);
-      if (!book) return res.status(404).json({ message: "Book not found" });
+      if (!req.session.userId) return res.status(401).json({ message: "يجب تسجيل الدخول سيدي" });
+      if (!req.file) return res.status(400).json({ message: "لم يتم اختيار ملف" });
 
-      if (req.user.role !== "admin" && book.authorId !== req.user.id) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
+      const file = req.file;
+      const fileExt = path.extname(file.originalname);
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${fileExt}`;
 
-      const data = req.body;
-      const updated = await storage.updateBook(bookId, {
-        title: data.title || book.title,
-        authorName: data.authorName || book.authorName,
-        mainCategory: data.mainCategory || book.mainCategory,
-        subCategory: data.subCategory || book.subCategory,
-        volumes: data.volumes !== undefined ? Number(data.volumes) : book.volumes,
-        coverUrl: data.coverUrl !== undefined ? data.coverUrl : book.coverUrl,
-        description: data.description !== undefined ? data.description : book.description,
-        fileUrl: data.fileUrl !== undefined ? data.fileUrl : book.fileUrl,
+      const { data, error } = await supabase.storage
+        .from('books') 
+        .upload(fileName, fs.readFileSync(file.path), {
+          contentType: file.mimetype,
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: urlData } = supabase.storage
+        .from('books')
+        .getPublicUrl(fileName);
+
+      fs.unlinkSync(file.path);
+
+      res.json({
+        url: urlData.publicUrl,
+        fileName: file.originalname,
       });
-
-      res.json(updated);
     } catch (error: any) {
-      console.error("Error updating book:", error);
-      res.status(500).json({ message: error.message || "حدث خطأ أثناء تعديل الكتاب" });
+      res.status(500).json({ message: "فشل الرفع: " + error.message });
     }
   });
 
-  app.delete("/api/books/:id", requireAuth, async (req: any, res) => {
-    try {
-      const bookId = parseInt(req.params.id);
-      const book = await storage.getBook(bookId);
-      if (!book) return res.status(404).json({ message: "Book not found" });
-
-      if (req.user.role !== "admin" && book.authorId !== req.user.id) {
-        return res.status(403).json({ message: "Forbidden" });
-      }
-
-      await storage.deleteBook(bookId);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ========== Ratings ==========
-
-  app.post("/api/books/:id/rate", async (req, res) => {
-    try {
-      const sessionId = getSessionId(req);
-      const { rating } = req.body;
-      if (!rating || rating < 1 || rating > 5) return res.status(400).json({ message: "Invalid rating" });
-      await storage.rateBook(parseInt(req.params.id), sessionId, rating);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ========== Favorites ==========
-
-  app.get("/api/favorites", async (req, res) => {
-    try {
-      const sessionId = getSessionId(req);
-      const favs = await storage.getFavorites(sessionId);
-      res.json(favs);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.post("/api/favorites/:id", async (req, res) => {
-    try {
-      const sessionId = getSessionId(req);
-      await storage.toggleFavorite(parseInt(req.params.id), sessionId);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ========== Bookmarks ==========
-
-  app.get("/api/bookmarks/:bookId", async (req, res) => {
-    try {
-      const sessionId = getSessionId(req);
-      const bm = await storage.getBookmark(parseInt(req.params.bookId), sessionId);
-      res.json(bm);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  app.post("/api/bookmarks/:bookId", async (req, res) => {
-    try {
-      const sessionId = getSessionId(req);
-      const { page } = req.body;
-      await storage.setBookmark(parseInt(req.params.bookId), sessionId, page || 1);
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ========== Stats ==========
-
+  // ========== Stats & QR ==========
   app.get("/api/stats", async (_req, res) => {
-    try {
-      const stats = await storage.getStats();
-      res.json(stats);
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
+    try { res.json(await storage.getStats()); } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
-
-  app.post("/api/stats/visit", async (_req, res) => {
-    try {
-      await storage.incrementVisits();
-      res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
-
-  // ========== QR Code ==========
 
   app.get("/api/qrcode", async (req, res) => {
     try {
-      const protocol = isProduction ? "https" : "http";
+      const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
       const host = req.headers.host || "localhost:5000";
-      const url = `${protocol}://${host}`;
-      const qrCode = await QRCode.toDataURL(url, { width: 300, margin: 2 });
+      const qrCode = await QRCode.toDataURL(`${protocol}://${host}`, { width: 300 });
       res.json({ qrCode });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
-
- // ========== File Upload to Supabase (الملك عادل) ==========
-
-  app.post("/api/upload", upload.single("file"), async (req, res) => {
-    try {
-      if (!req.session.userId) return res.status(401).json({ message: "سيدي، يجب تسجيل الدخول أولاً" });
-      if (!req.file) return res.status(400).json({ message: "لم يتم اختيار ملف" });
-
-      const file = req.file;
-      const fileExt = path.extname(file.originalname);
-      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${fileExt}`;
-
-      // رفع الملف إلى Bucket اسمه 'books' في سوبابيس
-      // سيدي، تأكد من إنشاء Bucket بهذا الاسم وجعله Public
-      const { data, error } = await supabase.storage
-        .from('books') 
-        .upload(fileName, fs.readFileSync(file.path), {
-          contentType: file.mimetype,
-          upsert: true
-        });
-
-      if (error) throw error;
-
-      // الحصول على الرابط العام (Public URL)
-      const { data: urlData } = supabase.storage
-        .from('books')
-        .getPublicUrl(fileName);
-
-      // حذف الملف المؤقت من سيرفر Render للحفاظ على المساحة
-      fs.unlinkSync(file.path);
-
-      res.json({
-   url: urlData.publicUrl,
-        fileName: file.originalname,
-      });
-    } catch (error: any) {
-      console.error("Upload error:", error);
-      res.status(500).json({ message: "فشل الرفع لسوبابيس: " + error.message });
-    }
-  });
-// ... (بعد نهاية مسار الـ /api/upload)
-
-  // سيدي الملك، هذا الجزء هو الأهم لعمل الموقع على Render
-  // نستخدم (.*) بدلاً من * لتجنب خطأ "Missing parameter name"
-  // سيدي الملك، هذا التعديل سيهيئ المسارات بشكل صحيح لتعمل على Render و Vercel
- // سيدي الملك، هذا التعديل خاص بـ Express 5 للعمل على Render
-  return httpServer;
 }

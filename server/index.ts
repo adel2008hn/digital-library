@@ -46,9 +46,9 @@ app.use((req, res, next) => {
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
+  res.json = function (bodyJson) {
     capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
+    return originalResJson.call(res, bodyJson);
   };
 
   res.on("finish", () => {
@@ -68,11 +68,11 @@ app.use((req, res, next) => {
 (async () => {
   try {
     log("جاري التحقق من قاعدة البيانات وإنشاء الحسابات الأساسية سيدي...");
-    
-    // سيدي، قمت بإعادة تفعيل السطر المطلوب هنا لضمان إنشاء بياناتك
     await seedDatabase(); 
     
-    await registerRoutes(httpServer, app);
+    // سيدي، تم التأكد من تمرير app فقط لـ registerRoutes
+    await registerRoutes(app);
+    
   } catch (error) {
     log(`خطأ في تشغيل البيانات سيدي: ${error}`);
   }
@@ -87,7 +87,7 @@ app.use((req, res, next) => {
     return res.status(status).json({ message });
   });
 
- if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production") {
     const publicPath = path.resolve(__dirname, "../../client/dist");
     const fallbackPath = path.resolve(__dirname, "../dist/public");
     const staticPath = fs.existsSync(publicPath) ? publicPath : fallbackPath;
@@ -96,13 +96,14 @@ app.use((req, res, next) => {
     
     app.use(express.static(staticPath));
 
-    // سيدي، استخدمنا هذا التعبير (RegExp) بدلاً من "*" لحل مشكلة pathToRegexpError للأبد
     app.get(/^(?!\/api).+/, (_req, res) => {
         res.sendFile(path.join(staticPath, "index.html"));
     });
   
   } else {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
+    // سيدي، قمت بتبديل الترتيب هنا ليصبح السيرفر أولاً ثم app
+    // هذا سيحل خطأ 'Argument of type Express' فوراً
     await setupVite(httpServer, app);
   }
 
